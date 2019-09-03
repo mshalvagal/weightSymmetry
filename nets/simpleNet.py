@@ -9,6 +9,7 @@ class simpleFCNet(nn.Module):
         super(simpleFCNet, self).__init__()
 
         self.num_neurons = num_neurons
+        self.device = device
         
         self.dense_1 = nn.Linear(784, num_neurons)
         self.dense_out = nn.Linear(num_neurons, 10)
@@ -17,7 +18,7 @@ class simpleFCNet(nn.Module):
     def forward(self, x):
         x = x.view(-1, 784)
         x = F.relu(self.dense_1(x))
-        x = F.softmax(self.dense_out(x))
+        x = F.softmax(self.dense_out(x), dim=1)
         return x
     
     def grow_network(self, mode='simple_double'):
@@ -38,6 +39,9 @@ class simpleFCNet(nn.Module):
         new_dense_out.bias.data[:self.num_neurons] *= 2
         new_dense_out.weight.data[self.num_neurons:] *= -1
         new_dense_out.bias.data[self.num_neurons:] *= -1
+
+        new_dense_1.to(self.device)
+        new_dense_out.to(self.device)
 
         self.dense_1 = new_dense_1
         self.dense_out = new_dense_out
