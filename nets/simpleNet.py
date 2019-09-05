@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 
 class simpleFCNet(nn.Module):
@@ -21,7 +22,7 @@ class simpleFCNet(nn.Module):
         x = F.softmax(self.dense_out(x), dim=1)
         return x
     
-    def grow_network(self, mode='simple'):
+    def grow_network(self, mode):
         
         permutation_array = torch.arange(self.num_neurons*2)
         # permutation_array[self.num_neurons:] = torch.randint(self.num_neurons, (self.num_neurons, ))
@@ -35,13 +36,21 @@ class simpleFCNet(nn.Module):
         new_dense_out.weight.data = self.dense_out.weight.data[:, permutation_array]
         new_dense_out.bias.data = self.dense_out.bias.data
 
-        new_dense_out.weight.data[:self.num_neurons] *= 2
-        new_dense_out.bias.data[:self.num_neurons] *= 2
-        new_dense_out.weight.data[self.num_neurons:] *= -1
-        new_dense_out.bias.data[self.num_neurons:] *= -1
+        if mode == 'simple':
+            new_dense_out.weight.data[:self.num_neurons] *= 2
+            new_dense_out.bias.data[:self.num_neurons] *= 2
+            new_dense_out.weight.data[self.num_neurons:] *= -1
+            new_dense_out.bias.data[self.num_neurons:] *= -1
+        elif mode == 'noise':
+            new_dense_1.weight.data[:,:self.num_neurons] += np.sqrt(2.0/784)*torch.randn_like(new_dense_1.weight.data[:,:self.num_neurons])
+            new_dense_out.weight.data[:self.num_neurons] += np.sqrt(2.0/self.num_neurons)*torch.randn_like(new_dense_out.weight.data[:self.num_neurons])
+        elif mode == 'random_init':
+            new_dense_1.weight.data[:,:self.num_neurons] = np.sqrt(2.0/784)*torch.randn_like(new_dense_1.weight.data[:,:self.num_neurons])
+            new_dense_out.weight.data[:self.num_neurons] = np.sqrt(2.0/self.num_neurons)*torch.randn_like(new_dense_out.weight.data[:self.num_neurons])
 
         new_dense_1.to(self.device)
         new_dense_out.to(self.device)
 
         self.dense_1 = new_dense_1
         self.dense_out = new_dense_out
+        self.num_neurons *= 2

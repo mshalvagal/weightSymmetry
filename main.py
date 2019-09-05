@@ -96,20 +96,22 @@ def main():
                         help='random seed (default: 1)')
     parser.add_argument('--log-interval', type=int, default=20, metavar='N',
                         help='how many batches to wait before logging training status')
-    parser.add_argument('--logdir', type=str, default='demo',
-                        help='directory to store training curves')
+    # parser.add_argument('--logdir', type=str, default='demo',
+    #                     help='directory to store training curves')
     parser.add_argument('--save-model', action='store_true', default=False,
                         help='For Saving the current Model')
     parser.add_argument('--smart-init', action='store_true', default=False,
                         help='whether to start with weights from a smaller trained network')
+    parser.add_argument('--symmetry-break-method', type=str, default='simple',
+                        help='directory to store training curves')
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
-    print(torch.cuda.is_available())
+    if use_cuda:
+        print('GPU accelerated training enabled')
 
     torch.manual_seed(args.seed)
 
     device = torch.device("cuda:0" if use_cuda else "cpu")
-    print(device)
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
     train_loader = torch.utils.data.DataLoader(
@@ -130,15 +132,18 @@ def main():
         args.epochs = int(args.epochs/2)
 
     save_dir = os.path.join('logs', str(args.num_hidden_neurons) + ' neurons')
+    if args.smart_init:
+        save_dir = os.path.join(save_dir, 'smart_init_' + args.symmetry_break_method)
+    else:
+        save_dir = os.path.join(save_dir, 'train_from_scratch')    
+    os.makedirs(save_dir, exist_ok=True)
 
     for i in range(args.num_runs):
 
         if args.smart_init:
             model = simpleFCNet(num_neurons=int(args.num_hidden_neurons/2), device=device)
-            save_dir = os.path.join(save_dir, 'smart_init')
         else:
             model = simpleFCNet(num_neurons=args.num_hidden_neurons, device=device)
-            save_dir = os.path.join(save_dir, 'train_from_scratch')
         criterion = nn.CrossEntropyLoss()
 
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
@@ -148,13 +153,12 @@ def main():
 
         if args.smart_init:
             print("Growing network and continuing training")
-            model.grow_network()
+            model.grow_network(mode=args.symmetry_break_method)
             loss_new, acc_new = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader)
 
             losses = np.append(losses, loss_new)
             training_acc = np.append(training_acc, acc_new)
         
-        os.makedirs(save_dir, exist_ok=True)
         np.save(os.path.join(save_dir, 'loss_curve_' + str(i)), losses)
         np.save(os.path.join(save_dir, 'acc_curve_' + str(i)), training_acc)
 
