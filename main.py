@@ -44,7 +44,7 @@ def train(args, net, train_loader, criterion, optimizer, scheduler=None, device=
                     100. * batch_idx / len(train_loader), loss.item(), acc*100))
         
         if test_loader is not None:
-            val_loss, val_acc = test(net, test_loader, criterion)
+            val_loss, val_acc = test(net, test_loader, criterion, device=device)
             print('End of epoch {}: Validation loss: {:.6f}\tValidation accuracy: {:.2f}%'.format(
                 epoch + 1, val_loss, val_acc*100))
 
@@ -80,7 +80,7 @@ def main():
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
-    parser.add_argument('--num-runs=5', type=int, default=10, metavar='N',
+    parser.add_argument('--num-runs', type=int, default=10, metavar='N',
                         help='number of repeated runs (default: 5)')
     parser.add_argument('--epochs', type=int, default=5, metavar='N',
                         help='number of epochs to train (default: 10)')
@@ -104,10 +104,12 @@ def main():
                         help='whether to start with weights from a smaller trained network')
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
+    print(torch.cuda.is_available())
 
     torch.manual_seed(args.seed)
 
     device = torch.device("cuda:0" if use_cuda else "cpu")
+    print(device)
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
     train_loader = torch.utils.data.DataLoader(
@@ -126,28 +128,35 @@ def main():
 
     if args.smart_init:
         args.epochs = int(args.epochs/2)
-        model = simpleFCNet(num_neurons=int(args.num_hidden_neurons/2), device=device)
-    else:
-        model = simpleFCNet(num_neurons=args.num_hidden_neurons, device=device)
-    criterion = nn.CrossEntropyLoss()
-
-    optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
-    # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
-
-    losses, training_acc = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader)
-
-    if args.smart_init:
-        print("Growing network and continuing training")
-        model.grow_network()
-        loss_new, acc_new = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader)
-
-        losses = np.append(losses, loss_new)
-        training_acc = np.append(training_acc, acc_new)
 
     save_dir = os.path.join('logs', str(args.num_hidden_neurons) + ' neurons')
-    os.makedirs(save_dir, exist_ok=True)
-    np.save(os.path.join(save_dir, 'loss_curve'), losses)
-    np.save(os.path.join(save_dir, 'acc_curve'), training_acc)
+
+    for i in range(args.num_runs):
+
+        if args.smart_init:
+            model = simpleFCNet(num_neurons=int(args.num_hidden_neurons/2), device=device)
+            save_dir = os.path.join(save_dir, 'smart_init')
+        else:
+            model = simpleFCNet(num_neurons=args.num_hidden_neurons, device=device)
+            save_dir = os.path.join(save_dir, 'train_from_scratch')
+        criterion = nn.CrossEntropyLoss()
+
+        optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
+        # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
+
+        losses, training_acc = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader)
+
+        if args.smart_init:
+            print("Growing network and continuing training")
+            model.grow_network()
+            loss_new, acc_new = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader)
+
+            losses = np.append(losses, loss_new)
+            training_acc = np.append(training_acc, acc_new)
+        
+        os.makedirs(save_dir, exist_ok=True)
+        np.save(os.path.join(save_dir, 'loss_curve_' + str(i)), losses)
+        np.save(os.path.join(save_dir, 'acc_curve_' + str(i)), training_acc)
 
 
 if __name__ == '__main__':

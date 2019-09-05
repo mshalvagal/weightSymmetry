@@ -21,7 +21,7 @@ class simpleFCNet(nn.Module):
         x = F.softmax(self.dense_out(x), dim=1)
         return x
     
-    def grow_network(self, mode='simple_double'):
+    def grow_network(self, mode='simple'):
         
         permutation_array = torch.arange(self.num_neurons*2)
         # permutation_array[self.num_neurons:] = torch.randint(self.num_neurons, (self.num_neurons, ))
