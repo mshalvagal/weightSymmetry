@@ -80,8 +80,8 @@ def main():
                         help='input batch size for training (default: 64)')
     parser.add_argument('--test-batch-size', type=int, default=1000, metavar='N',
                         help='input batch size for testing (default: 1000)')
-    parser.add_argument('--num-runs', type=int, default=10, metavar='N',
-                        help='number of repeated runs (default: 5)')
+    parser.add_argument('--num-runs', type=int, default=1, metavar='N',
+                        help='number of repeated runs (default: 1)')
     parser.add_argument('--epochs', type=int, default=5, metavar='N',
                         help='number of epochs to train (default: 10)')
     parser.add_argument('--num-hidden-neurons', type=int, default=10, metavar='N',
@@ -154,6 +154,7 @@ def main():
         if args.smart_init:
             print("Growing network and continuing training")
             model.grow_network(mode=args.symmetry_break_method)
+            optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
             loss_new, acc_new = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader)
 
             losses = np.append(losses, loss_new)
