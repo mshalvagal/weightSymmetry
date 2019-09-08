@@ -96,14 +96,12 @@ def main():
                         help='random seed (default: 1)')
     parser.add_argument('--log-interval', type=int, default=20, metavar='N',
                         help='how many batches to wait before logging training status')
-    # parser.add_argument('--logdir', type=str, default='demo',
-    #                     help='directory to store training curves')
-    parser.add_argument('--save-model', action='store_true', default=False,
-                        help='For Saving the current Model')
     parser.add_argument('--smart-init', action='store_true', default=False,
                         help='whether to start with weights from a smaller trained network')
+    parser.add_argument('--extra-hidden-layer', action='store_true', default=False,
+                        help='For using two hidden layers instead of the default of one')
     parser.add_argument('--symmetry-break-method', type=str, default='simple',
-                        help='directory to store training curves')
+                        help='which method to use to break symmetry in new network')
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
     if use_cuda:
@@ -131,19 +129,24 @@ def main():
     if args.smart_init:
         args.epochs = int(args.epochs/2)
 
-    save_dir = os.path.join('logs', str(args.num_hidden_neurons) + ' neurons')
+    net_definition = simpleFCNet
+    if args.extra_hidden_layer:
+        net_definition = FCNet
+
+    save_dir = os.path.join('logs', '2 hidden layers' if args.extra_hidden_layer else '1 hidden layer')
+    save_dir = os.path.join(save_dir, str(args.num_hidden_neurons) + ' neurons')
     if args.smart_init:
         save_dir = os.path.join(save_dir, 'smart_init_' + args.symmetry_break_method)
     else:
-        save_dir = os.path.join(save_dir, 'train_from_scratch')    
+        save_dir = os.path.join(save_dir, 'train_from_scratch')
     os.makedirs(save_dir, exist_ok=True)
 
     for i in range(args.num_runs):
 
         if args.smart_init:
-            model = FCNet(num_neurons=int(args.num_hidden_neurons/2), device=device)
+            model = net_definition(num_neurons=int(args.num_hidden_neurons/2), device=device)
         else:
-            model = FCNet(num_neurons=args.num_hidden_neurons, device=device)
+            model = net_definition(num_neurons=args.num_hidden_neurons, device=device)
         criterion = nn.CrossEntropyLoss()
 
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
@@ -153,7 +156,7 @@ def main():
 
         if args.smart_init:
             print("Growing network and continuing training")
-            model.grow_network(mode=args.symmetry_break_method)
+            model.grow_network(symmetry_break_method=args.symmetry_break_method)
 
             val_loss, val_acc = test(model, test_loader, criterion, device=device)
             print('After growing: Validation loss: {:.6f}\tValidation accuracy: {:.2f}%'.format(

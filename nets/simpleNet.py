@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from net2net import widen_v1
+from nets.net2net import widen_v1
 
 class simpleFCNet(nn.Module):
 
@@ -23,8 +23,8 @@ class simpleFCNet(nn.Module):
     
     def grow_network(self, symmetry_break_method='simple'):
         
-        self.dense_1, self.dense_2 = widen_v1(self.dense_1, self.dense_2, symmetry_break_method)
-        self.dense_2, self.dense_out = widen_v1(self.dense_2, self.dense_out, symmetry_break_method)
+        self.dense_1, self.dense_out = widen_v1(self.dense_1, self.dense_out, symmetry_break_method)
+        self.to(self.device)
 
 
 class FCNet(nn.Module):
@@ -50,3 +50,5 @@ class FCNet(nn.Module):
         
         self.dense_1, self.dense_2 = widen_v1(self.dense_1, self.dense_2, symmetry_break_method)
         self.dense_2, self.dense_out = widen_v1(self.dense_2, self.dense_out, symmetry_break_method)
+
+        self.to(self.device)
