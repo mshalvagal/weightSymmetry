@@ -8,7 +8,7 @@ import numpy as np
 import argparse
 import os
 
-from nets.simpleNet import simpleFCNet
+from nets.simpleNet import simpleFCNet, FCNet
 
 def train(args, net, train_loader, criterion, optimizer, scheduler=None, device='cpu', test_loader=None):
     losses = np.zeros(args.epochs)
@@ -141,9 +141,9 @@ def main():
     for i in range(args.num_runs):
 
         if args.smart_init:
-            model = simpleFCNet(num_neurons=int(args.num_hidden_neurons/2), device=device)
+            model = FCNet(num_neurons=int(args.num_hidden_neurons/2), device=device)
         else:
-            model = simpleFCNet(num_neurons=args.num_hidden_neurons, device=device)
+            model = FCNet(num_neurons=args.num_hidden_neurons, device=device)
         criterion = nn.CrossEntropyLoss()
 
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
@@ -154,6 +154,11 @@ def main():
         if args.smart_init:
             print("Growing network and continuing training")
             model.grow_network(mode=args.symmetry_break_method)
+
+            val_loss, val_acc = test(model, test_loader, criterion, device=device)
+            print('After growing: Validation loss: {:.6f}\tValidation accuracy: {:.2f}%'.format(
+                val_loss, val_acc*100))
+
             optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
             loss_new, acc_new = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader)
 
