@@ -48,7 +48,7 @@ def train(args, net, train_loader, criterion, optimizer, scheduler=None, device=
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tTraining accuracy: {:.2f}%'.format(
                     epoch + start_epoch + 1, batch_idx * train_loader.batch_size, len(train_loader.dataset),
                     100. * batch_idx / len(train_loader), loss.item(), acc*100))
-                    
+
                 losses.append(running_loss/(args.log_interval))
                 training_acc.append(100.0*running_acc/args.log_interval)
                 running_loss = 0.0
@@ -60,7 +60,7 @@ def train(args, net, train_loader, criterion, optimizer, scheduler=None, device=
                 epoch + start_epoch + 1, val_loss, val_acc*100))
 
         if save_weights:
-            torch.save(net, os.path.join(save_dir, 'epoch_'+str(epoch)+'.pt'))
+            torch.save(net, os.path.join(save_dir, 'epoch_'+ str(epoch + 1) + '.pt'))
 
     losses = np.array(losses)
     training_acc = np.array(training_acc)
@@ -86,6 +86,22 @@ def test(net, test_loader, criterion, device='cpu'):
     val_acc /= len(test_loader)
     
     return val_loss, val_acc
+
+def teacher_exists(save_dir, i, epochs):
+
+    if not os.path.isfile(os.path.join(save_dir, 'teacher', 'loss_curve_' + str(i) + '.npy')):
+        return False
+    if not os.path.isfile(os.path.join(save_dir, 'teacher', 'acc_curve_' + str(i) + '.npy')):
+        return False
+    if not os.path.isfile(os.path.join(save_dir, 'teacher', 'trained_network_' + str(i) + '.pt')):
+        return False
+
+    # losses = np.load(os.path.join(save_dir, 'teacher', 'loss_curve_' + str(i) + '.npy'))
+    # training_acc = np.load(os.path.join(save_dir, 'teacher', 'acc_curve_' + str(i) + '.npy'))
+    # if len(losses) != epochs or len(training_acc) != epochs:
+    #     return False
+    
+    return True
 
 def main():
     # Training settings
@@ -147,12 +163,12 @@ def main():
     if args.extra_hidden_layer:
         net_definition = FCNet
 
-    save_dir = os.path.join('logs', '2 hidden layers' if args.extra_hidden_layer else '1 hidden layer')
-    save_dir = os.path.join(save_dir, str(args.num_hidden_neurons) + ' neurons')
+    parent_dir = os.path.join('logs', '2 hidden layers' if args.extra_hidden_layer else '1 hidden layer')
+    parent_dir = os.path.join(parent_dir, str(args.num_hidden_neurons) + ' neurons')
     if args.smart_init:
-        save_dir = os.path.join(save_dir, 'smart_init_' + args.symmetry_break_method)
+        save_dir = os.path.join(parent_dir, 'smart_init_' + args.symmetry_break_method)
     else:
-        save_dir = os.path.join(save_dir, 'train_from_scratch')
+        save_dir = os.path.join(parent_dir, 'train_from_scratch')
     os.makedirs(save_dir, exist_ok=True)
 
     for i in range(args.num_runs):
@@ -173,8 +189,23 @@ def main():
         else:
             save_weights=False
 
-        losses, training_acc = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader, 
-            save_weights=save_weights, save_dir=save_dir)
+        if not args.smart_init:
+            losses, training_acc = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader, 
+                save_weights=save_weights, save_dir=save_dir)
+        elif teacher_exists(parent_dir, i, args.epochs):
+            print("Teacher exists, continuing training")
+            losses = np.load(os.path.join(parent_dir, 'teacher', 'loss_curve_' + str(i) + '.npy'))
+            training_acc = np.load(os.path.join(parent_dir, 'teacher', 'acc_curve_' + str(i) + '.npy'))
+            model = torch.load(os.path.join(parent_dir, 'teacher', 'trained_network_' + str(i) + '.pt'))
+        else:
+            print("Teacher does not exist, training from start")
+            losses, training_acc = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader, 
+                save_weights=save_weights, save_dir=save_dir)
+            
+            os.makedirs(os.path.join(parent_dir, 'teacher'), exist_ok=True)
+            np.save(os.path.join(parent_dir, 'teacher', 'loss_curve_' + str(i)), losses)
+            np.save(os.path.join(parent_dir, 'teacher', 'acc_curve_' + str(i)), training_acc)
+            torch.save(model, os.path.join(parent_dir, 'teacher', 'trained_network_' + str(i) + '.pt'))
 
         if args.smart_init:
             print("Growing network and continuing training")
