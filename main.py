@@ -10,14 +10,21 @@ import os
 
 from nets.simpleNet import simpleFCNet, FCNet
 
-def train(args, net, train_loader, criterion, optimizer, scheduler=None, device='cpu', test_loader=None):
-    losses = np.zeros(args.epochs)
-    training_acc = np.zeros(args.epochs)
+def train(args, net, train_loader, criterion, optimizer, scheduler=None, device='cpu', test_loader=None, start_epoch=0, save_weights=False, save_dir=None):
+    losses = []
+    training_acc = []
+
+    if save_weights:
+        save_dir = os.path.join(save_dir, 'weight_history')
+        os.makedirs(save_dir, exist_ok=True)
 
     for epoch in range(args.epochs):  # loop over the dataset multiple times
         
         if scheduler is not None:
             scheduler.step()
+
+        running_loss = 0.0
+        running_acc = 0.0        
 
         for batch_idx, data in enumerate(train_loader, 0):
             # get the inputs; data is a list of [inputs, labels]
@@ -33,23 +40,30 @@ def train(args, net, train_loader, criterion, optimizer, scheduler=None, device=
             optimizer.step()
 
             # print statistics
-            losses[epoch] += loss.item()        
+            running_loss += loss.item()
             acc = torch.sum(torch.argmax(outputs, dim=1)==labels).item()/train_loader.batch_size
+            running_acc += acc
 
-            training_acc[epoch] += acc
-
-            if batch_idx % args.log_interval == 0:
+            if batch_idx % args.log_interval == 0 and batch_idx != 0:
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tTraining accuracy: {:.2f}%'.format(
-                    epoch + 1, batch_idx * train_loader.batch_size, len(train_loader.dataset),
+                    epoch + start_epoch + 1, batch_idx * train_loader.batch_size, len(train_loader.dataset),
                     100. * batch_idx / len(train_loader), loss.item(), acc*100))
+                    
+                losses.append(running_loss/(args.log_interval))
+                training_acc.append(100.0*running_acc/args.log_interval)
+                running_loss = 0.0
+                running_acc = 0.0
         
         if test_loader is not None:
             val_loss, val_acc = test(net, test_loader, criterion, device=device)
             print('End of epoch {}: Validation loss: {:.6f}\tValidation accuracy: {:.2f}%'.format(
-                epoch + 1, val_loss, val_acc*100))
+                epoch + start_epoch + 1, val_loss, val_acc*100))
 
-    losses /= len(train_loader)
-    training_acc /= len(train_loader)
+        if save_weights:
+            torch.save(net, os.path.join(save_dir, 'epoch_'+str(epoch)+'.pt'))
+
+    losses = np.array(losses)
+    training_acc = np.array(training_acc)
     
     return losses, training_acc
 
@@ -147,23 +161,34 @@ def main():
             model = net_definition(num_neurons=int(args.num_hidden_neurons/2), device=device)
         else:
             model = net_definition(num_neurons=args.num_hidden_neurons, device=device)
+        print('Model definition')
+        print(model)
         criterion = nn.CrossEntropyLoss()
 
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
         # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
 
-        losses, training_acc = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader)
+        if i == 0:
+            save_weights=True
+        else:
+            save_weights=False
+
+        losses, training_acc = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader, 
+            save_weights=save_weights, save_dir=save_dir)
 
         if args.smart_init:
             print("Growing network and continuing training")
             model.grow_network(symmetry_break_method=args.symmetry_break_method)
+            print('New model definition')
+            print(model)
 
             val_loss, val_acc = test(model, test_loader, criterion, device=device)
             print('After growing: Validation loss: {:.6f}\tValidation accuracy: {:.2f}%'.format(
                 val_loss, val_acc*100))
 
             optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
-            loss_new, acc_new = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader)
+            loss_new, acc_new = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader, 
+                save_weights=save_weights, start_epoch=args.epochs, save_dir=save_dir)
 
             losses = np.append(losses, loss_new)
             training_acc = np.append(training_acc, acc_new)
