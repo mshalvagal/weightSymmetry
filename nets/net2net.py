@@ -35,6 +35,10 @@ def widen_v1(m_in, m_out, symmetry_break_method):
         nw_out /= 2.0
         nw_out[:, old_width:] += np.sqrt(2.0/(2*old_width))*torch.randn_like(w_out)
         nw_in[old_width:] += np.sqrt(2.0/w_in.shape[1])*torch.randn_like(w_in)
+    elif symmetry_break_method == 'noise_unscaled':
+        nw_out /= 2.0
+        nw_out[:, old_width:] += torch.randn_like(w_out)
+        nw_in[old_width:] += torch.randn_like(w_in)
     elif symmetry_break_method == 'random_init':
         nw_out[:, old_width:] = np.sqrt(2.0/(2*old_width))*torch.randn_like(w_out)
         nw_in[old_width:] = np.sqrt(2.0/w_in.shape[1])*torch.randn_like(w_in)

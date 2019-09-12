@@ -10,13 +10,11 @@ import os
 
 from nets.simpleNet import simpleFCNet, FCNet
 
-def train(args, net, train_loader, criterion, optimizer, scheduler=None, device='cpu', test_loader=None, start_epoch=0, save_weights=False, save_dir=None):
+def train(args, net, train_loader, criterion, optimizer, scheduler=None, device='cpu', test_loader=None, start_epoch=0, save_dir='demo'):
     losses = []
     training_acc = []
 
-    if save_weights:
-        save_dir = os.path.join(save_dir, 'weight_history')
-        os.makedirs(save_dir, exist_ok=True)
+    os.makedirs(save_dir, exist_ok=True)
 
     for epoch in range(args.epochs):  # loop over the dataset multiple times
         
@@ -44,7 +42,7 @@ def train(args, net, train_loader, criterion, optimizer, scheduler=None, device=
             acc = torch.sum(torch.argmax(outputs, dim=1)==labels).item()/train_loader.batch_size
             running_acc += acc
 
-            if batch_idx % args.log_interval == 0 and batch_idx != 0:
+            if batch_idx % args.log_interval == (args.log_interval - 1):
                 print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}\tTraining accuracy: {:.2f}%'.format(
                     epoch + start_epoch + 1, batch_idx * train_loader.batch_size, len(train_loader.dataset),
                     100. * batch_idx / len(train_loader), loss.item(), acc*100))
@@ -59,8 +57,7 @@ def train(args, net, train_loader, criterion, optimizer, scheduler=None, device=
             print('End of epoch {}: Validation loss: {:.6f}\tValidation accuracy: {:.2f}%'.format(
                 epoch + start_epoch + 1, val_loss, val_acc*100))
 
-        if save_weights:
-            torch.save(net, os.path.join(save_dir, 'epoch_'+ str(epoch + 1) + '.pt'))
+        torch.save(net, os.path.join(save_dir, 'epoch_'+ str(epoch + start_epoch +  1) + '.pt'))
 
     losses = np.array(losses)
     training_acc = np.array(training_acc)
@@ -122,8 +119,8 @@ def main():
                         help='SGD momentum (default: 0.5)')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='disables CUDA training')
-    parser.add_argument('--seed', type=int, default=1, metavar='S',
-                        help='random seed (default: 1)')
+    parser.add_argument('--seed', type=int, default=42, metavar='S',
+                        help='random seed (default: 42)')
     parser.add_argument('--log-interval', type=int, default=20, metavar='N',
                         help='how many batches to wait before logging training status')
     parser.add_argument('--smart-init', action='store_true', default=False,
@@ -173,6 +170,8 @@ def main():
 
     for i in range(args.num_runs):
 
+        print('Beginning run ' + str(i))
+
         if args.smart_init:
             model = net_definition(num_neurons=int(args.num_hidden_neurons/2), device=device)
         else:
@@ -191,7 +190,7 @@ def main():
 
         if not args.smart_init:
             losses, training_acc = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader, 
-                save_weights=save_weights, save_dir=save_dir)
+                save_dir=os.path.join(save_dir, 'weight_history', 'run_' + str(i)))
         elif teacher_exists(parent_dir, i, args.epochs):
             print("Teacher exists, continuing training")
             losses = np.load(os.path.join(parent_dir, 'teacher', 'loss_curve_' + str(i) + '.npy'))
@@ -200,7 +199,7 @@ def main():
         else:
             print("Teacher does not exist, training from start")
             losses, training_acc = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader, 
-                save_weights=save_weights, save_dir=save_dir)
+                save_dir=os.path.join(save_dir, 'weight_history', 'run_' + str(i)))
             
             os.makedirs(os.path.join(parent_dir, 'teacher'), exist_ok=True)
             np.save(os.path.join(parent_dir, 'teacher', 'loss_curve_' + str(i)), losses)
@@ -219,7 +218,7 @@ def main():
 
             optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
             loss_new, acc_new = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader, 
-                save_weights=save_weights, start_epoch=args.epochs, save_dir=save_dir)
+                start_epoch = args.epochs, save_dir=os.path.join(save_dir, 'weight_history', 'run_' + str(i)))
 
             losses = np.append(losses, loss_new)
             training_acc = np.append(training_acc, acc_new)
