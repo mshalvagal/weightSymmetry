@@ -15,7 +15,7 @@ def plot_learning_curves(parent_dir, mode='mean', log_interval=20, teacher_dir=N
             if os.path.isdir(os.path.join(method_dir, f_name)):
                 # skip directories
                 continue
-            if f_name.startswith('loss'):
+            if f_name.startswith('loss') and f_name.endswith('.npy'):
                 losses.append(np.load(os.path.join(method_dir, f_name)))
             elif f_name.startswith('acc'):
                 acc.append(np.load(os.path.join(method_dir, f_name)))
@@ -28,7 +28,7 @@ def plot_learning_curves(parent_dir, mode='mean', log_interval=20, teacher_dir=N
         if mode=='mean':
             plt.plot(np.arange(losses.shape[1])*log_interval, np.mean(losses, 0), label=method)
             se = np.std(losses,0)/np.sqrt(losses.shape[0])
-            plt.fill_between(np.arange(losses.shape[1])*log_interval, np.mean(losses, 0)-se, np.mean(losses, 0)+se, alpha=0.5)
+            plt.fill_between(np.arange(losses.shape[1])*log_interval, np.mean(losses, 0)-se, np.mean(losses, 0)+se, alpha=0.25)
         else:
             plt.plot(np.arange(losses.shape[1])*log_interval, losses[0], label=method)
 
@@ -38,7 +38,7 @@ def plot_learning_curves(parent_dir, mode='mean', log_interval=20, teacher_dir=N
         if mode=='mean':
             plt.plot(np.arange(acc.shape[1])*log_interval, np.mean(acc, 0), label=method)
             se = np.std(acc,0)/np.sqrt(acc.shape[0])
-            plt.fill_between(np.arange(acc.shape[1])*log_interval, np.mean(acc, 0)-se, np.mean(acc, 0)+se, alpha=0.5)
+            plt.fill_between(np.arange(acc.shape[1])*log_interval, np.mean(acc, 0)-se, np.mean(acc, 0)+se, alpha=0.25)
         else:
             plt.plot(np.arange(losses.shape[1])*log_interval, losses[0], label=method)
     
@@ -49,7 +49,7 @@ def plot_learning_curves(parent_dir, mode='mean', log_interval=20, teacher_dir=N
             if os.path.isdir(os.path.join(teacher_dir, f_name)):
                 # skip directories
                 continue
-            if f_name.startswith('loss'):
+            if f_name.startswith('loss') and f_name.endswith('.npy'):
                 losses.append(np.load(os.path.join(teacher_dir, f_name)))
             elif f_name.startswith('acc'):
                 acc.append(np.load(os.path.join(teacher_dir, f_name)))
@@ -62,7 +62,7 @@ def plot_learning_curves(parent_dir, mode='mean', log_interval=20, teacher_dir=N
         if mode=='mean':
             plt.plot(np.arange(losses.shape[1])*log_interval, np.mean(losses, 0), label='teacher')
             se = np.std(losses,0)/np.sqrt(losses.shape[0])
-            plt.fill_between(np.arange(losses.shape[1])*log_interval, np.mean(losses, 0)-se, np.mean(losses, 0)+se, alpha=0.5)
+            plt.fill_between(np.arange(losses.shape[1])*log_interval, np.mean(losses, 0)-se, np.mean(losses, 0)+se, alpha=0.25)
         else:
             plt.plot(np.arange(losses.shape[1])*log_interval, losses[0], label='teacher')
 
@@ -72,7 +72,7 @@ def plot_learning_curves(parent_dir, mode='mean', log_interval=20, teacher_dir=N
         if mode=='mean':
             plt.plot(np.arange(acc.shape[1])*log_interval, np.mean(acc, 0), label='teacher')
             se = np.std(acc,0)/np.sqrt(acc.shape[0])
-            plt.fill_between(np.arange(acc.shape[1])*log_interval, np.mean(acc, 0)-se, np.mean(acc, 0)+se, alpha=0.5)
+            plt.fill_between(np.arange(acc.shape[1])*log_interval, np.mean(acc, 0)-se, np.mean(acc, 0)+se, alpha=0.25)
         else:
             plt.plot(np.arange(losses.shape[1])*log_interval, losses[0], label='teacher')
 

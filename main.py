@@ -7,8 +7,10 @@ from torchvision import datasets, transforms
 import numpy as np
 import argparse
 import os
+import copy
 
 from nets.simpleNet import simpleFCNet, FCNet
+from nets.convNet import simpleConvNet
 
 def train(args, net, train_loader, criterion, optimizer, scheduler=None, device='cpu', test_loader=None, start_epoch=0, save_dir='demo'):
     losses = []
@@ -36,6 +38,11 @@ def train(args, net, train_loader, criterion, optimizer, scheduler=None, device=
             loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
+
+            # print('Gradients for new weights')
+            # print(torch.norm(net.dense_1.weight.grad[10:]))
+            # print('Gradients for old weights')
+            # print(torch.norm(net.dense_1.weight.grad[:10]))
 
             # print statistics
             running_loss += loss.item()
@@ -109,7 +116,7 @@ def main():
                         help='input batch size for testing (default: 1000)')
     parser.add_argument('--num-runs', type=int, default=1, metavar='N',
                         help='number of repeated runs (default: 1)')
-    parser.add_argument('--epochs', type=int, default=5, metavar='N',
+    parser.add_argument('--epochs', type=int, default=10, metavar='N',
                         help='number of epochs to train (default: 10)')
     parser.add_argument('--num-hidden-neurons', type=int, default=10, metavar='N',
                         help='number of neurons in hidden layer (default: 10)')
@@ -123,11 +130,15 @@ def main():
                         help='random seed (default: 42)')
     parser.add_argument('--log-interval', type=int, default=20, metavar='N',
                         help='how many batches to wait before logging training status')
+    parser.add_argument('--logdir', type=str, default='logs',
+                        help='parent directory to store logs')
     parser.add_argument('--smart-init', action='store_true', default=False,
                         help='whether to start with weights from a smaller trained network')
+    parser.add_argument('--convnet', action='store_true', default=False,
+                        help='Flag to use conv layers')
     parser.add_argument('--extra-hidden-layer', action='store_true', default=False,
                         help='For using two hidden layers instead of the default of one')
-    parser.add_argument('--symmetry-break-method', type=str, default='simple',
+    parser.add_argument('--symmetry-break-method', type=str, default='v2',
                         help='which method to use to break symmetry in new network')
     args = parser.parse_args()
     use_cuda = not args.no_cuda and torch.cuda.is_available()
@@ -140,14 +151,14 @@ def main():
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
     train_loader = torch.utils.data.DataLoader(
-        datasets.MNIST('data', train=True, download=True,
+        datasets.MNIST('data/mnist', train=True, download=True,
                        transform=transforms.Compose([
                            transforms.ToTensor(),
                            transforms.Normalize((0.1307,), (0.3081,))
                        ])),
         batch_size=args.batch_size, shuffle=True, **kwargs)
     test_loader = torch.utils.data.DataLoader(
-        datasets.MNIST('data', train=False, transform=transforms.Compose([
+        datasets.MNIST('data/mnist', train=False, transform=transforms.Compose([
                            transforms.ToTensor(),
                            transforms.Normalize((0.1307,), (0.3081,))
                        ])),
@@ -156,11 +167,14 @@ def main():
     if args.smart_init:
         args.epochs = int(args.epochs/2)
 
-    net_definition = simpleFCNet
-    if args.extra_hidden_layer:
-        net_definition = FCNet
+    if args.convnet:
+        net_definition = simpleConvNet
+    else:
+        net_definition = simpleFCNet
+        if args.extra_hidden_layer:
+            net_definition = FCNet
 
-    parent_dir = os.path.join('logs', '2 hidden layers' if args.extra_hidden_layer else '1 hidden layer')
+    parent_dir = os.path.join(args.logdir, '2 hidden layers' if args.extra_hidden_layer else '1 hidden layer')
     parent_dir = os.path.join(parent_dir, str(args.num_hidden_neurons) + ' neurons')
     if args.smart_init:
         save_dir = os.path.join(parent_dir, 'smart_init_' + args.symmetry_break_method)
@@ -196,6 +210,7 @@ def main():
             losses = np.load(os.path.join(parent_dir, 'teacher', 'loss_curve_' + str(i) + '.npy'))
             training_acc = np.load(os.path.join(parent_dir, 'teacher', 'acc_curve_' + str(i) + '.npy'))
             model = torch.load(os.path.join(parent_dir, 'teacher', 'trained_network_' + str(i) + '.pt'))
+            model.num_neurons = args.num_hidden_neurons//2
         else:
             print("Teacher does not exist, training from start")
             losses, training_acc = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader, 
@@ -208,6 +223,12 @@ def main():
 
         if args.smart_init:
             print("Growing network and continuing training")
+
+            model_ = net_definition(num_neurons=args.num_hidden_neurons, device=device)
+            model_ = copy.deepcopy(model)
+
+            del model
+            model = model_
             model.grow_network(symmetry_break_method=args.symmetry_break_method)
             print('New model definition')
             print(model)
