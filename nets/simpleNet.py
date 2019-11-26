@@ -22,12 +22,12 @@ class simpleFCNet(nn.Module):
         x = F.softmax(self.dense_out(x), dim=1)
         return x
     
-    def grow_network(self, symmetry_break_method='simple'):
+    def grow_network(self, symmetry_break_method='simple', noise_var=0.5, weight_norm=False):
         
         if symmetry_break_method == 'v2':
             self.dense_1, self.dense_out, _ = widen_v2(self.dense_1, self.dense_out, self.num_neurons*2)
         else:
-            self.dense_1, self.dense_out = widen_v1(self.dense_1, self.dense_out, symmetry_break_method)
+            self.dense_1, self.dense_out = widen_v1(self.dense_1, self.dense_out, symmetry_break_method, noise_var, weight_norm)
 
         self.num_neurons *= 2
         self.to(self.device)

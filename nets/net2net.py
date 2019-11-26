@@ -5,7 +5,20 @@ import numpy as np
 
 from collections import Counter
 
-def widen_v1(m_in, m_out, symmetry_break_method):
+def generate_rotated_vector(rot_angle, in_weight):
+
+    x = in_weight.clone().to('cpu')
+    nx = x/x.norm()
+
+    y = torch.randn_like(x)
+    y = y - torch.dot(y, nx)*nx
+    ny = y/y.norm()
+
+    out = x.norm()*(nx*torch.cos(rot_angle) + ny*torch.sin(rot_angle))
+    
+    return out
+
+def widen_v1(m_in, m_out, symmetry_break_method, noise_var, weight_norm):
     
     w_in = m_in.weight.data
     b_in = m_in.bias.data
@@ -15,38 +28,47 @@ def widen_v1(m_in, m_out, symmetry_break_method):
 
     old_width = w_in.shape[0]
     assert old_width == w_out.shape[1], "Module weights are not compatible"
+    
+    if weight_norm:
+        for i in range(old_width):
+            norm = w_in.select(0, i).norm()
+            w_in.select(0, i).div_(norm)
+            b_in.select(i).div_(norm)
 
     nw_in = w_in.repeat(2, 1)
     nb_in = b_in.repeat(2)
     nw_out = w_out.repeat(1, 2)
 
-    permutation_array = torch.randperm(old_width)
+    nm_in = nn.Linear(w_in.shape[1], 2*old_width)
+    nm_out = nn.Linear(2*old_width, w_out.shape[0])
 
-    nw_in[old_width:] = w_in[permutation_array]
-    nb_in[old_width:] = b_in[permutation_array]
-    nw_out[:, old_width:] = w_out[:, permutation_array]
+    # permutation_array = torch.randperm(old_width)
+
+    # nw_in[old_width:] = w_in[permutation_array]
+    # nb_in[old_width:] = b_in[permutation_array]
+    # nw_out[:, old_width:] = w_out[:, permutation_array]
 
     if symmetry_break_method == 'simple':
         nw_out[:, :old_width] *= 2.0
         nw_out[:, old_width:] *= -1.0
-    if symmetry_break_method == 'convex_comb':
-        weights = torch.rand(old_width).to(w_in.device)
-        nw_out[:, :old_width] *= weights
-        nw_out[:, old_width:] *= 1.0-weights
     elif symmetry_break_method == 'noise':
         nw_out /= 2.0
-        nw_out[:, old_width:] += np.sqrt(2.0/(2*old_width))*torch.randn_like(w_out)
-        nw_in[old_width:] += np.sqrt(2.0/w_in.shape[1])*torch.randn_like(w_in)
-    elif symmetry_break_method == 'noise_unscaled':
+        nw_out[:, old_width:] += noise_var*torch.randn_like(w_out)
+        nw_in[old_width:] += noise_var*torch.randn_like(w_in)
+    elif symmetry_break_method == 'rotation_noise':
         nw_out /= 2.0
-        nw_out[:, old_width:] += torch.randn_like(w_out)
-        nw_in[old_width:] += torch.randn_like(w_in)
-    elif symmetry_break_method == 'random_init':
-        nw_out[:, old_width:] = np.sqrt(2.0/(2*old_width))*torch.randn_like(w_out)
-        nw_in[old_width:] = np.sqrt(2.0/w_in.shape[1])*torch.randn_like(w_in)
+        rot_angles = noise_var*0.5*(1 + torch.rand_like(b_in))
 
-    nm_in = nn.Linear(w_in.shape[1], 2*old_width)
-    nm_out = nn.Linear(2*old_width, w_out.shape[0])
+        for i, rot_angle in enumerate(rot_angles):
+            nw_in[old_width+i] = generate_rotated_vector(rot_angle, nw_in[old_width+i]).to(w_in.device)
+        
+        # weights = torch.rand(old_width).to(w_in.device)
+        # nw_out[:, :old_width] *= weights
+        # nw_out[:, old_width:] *= 1.0-weights
+
+    elif symmetry_break_method == 'random_init':
+        nw_out[:, old_width:] = nm_out.weight.data[:, old_width:].clone()
+        nw_in[old_width:] = nm_in.weight.data[old_width:].clone()
 
     nm_in.weight.data = nw_in
     nm_in.bias.data = nb_in
