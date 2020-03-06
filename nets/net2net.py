@@ -49,8 +49,9 @@ def widen_v1(m_in, m_out, symmetry_break_method, noise_var, weight_norm):
     # nw_out[:, old_width:] = w_out[:, permutation_array]
 
     if symmetry_break_method == 'simple':
-        nw_out[:, :old_width] *= 2.0
-        nw_out[:, old_width:] *= -1.0
+        weights = torch.rand(old_width).to(w_in.device)
+        nw_out[:, :old_width] *= weights
+        nw_out[:, old_width:] *= 1.0-weights
     elif symmetry_break_method == 'noise':
         nw_out /= 2.0
         nw_out[:, old_width:] += noise_var*torch.randn_like(w_out)

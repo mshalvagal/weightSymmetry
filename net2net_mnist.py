@@ -9,27 +9,21 @@ import argparse
 import os
 import copy
 
-from sklearn.metrics.pairwise import cosine_similarity
-
 from nets.simpleNet import simpleFCNet, FCNet
 from nets.convNet import simpleConvNet
 
-def pairwise_cos_dist(net):
-    w = net.dense_1.weight.data.cpu()
-    b = net.dense_1.bias.data.cpu()
-    w1 = w/b.unsqueeze(1)
-
-    cd = cosine_similarity(w1,w1)
-    
-    return cd
+from utils.utils import gradient_projection_norms, pairwise_cos_dist
 
 def train(args, net, train_loader, criterion, optimizer, scheduler=None, device='cpu', test_loader=None, start_epoch=0, save_dir='demo',
           ortho_reg=False):
     losses = []
     training_acc = []
     cosine_dists = []
+    # mean_grad_proj = []
+    # diff_grad_proj = []
 
     os.makedirs(save_dir, exist_ok=True)
+    net.train()
 
     for epoch in range(args.epochs):  # loop over the dataset multiple times
         
@@ -81,7 +75,11 @@ def train(args, net, train_loader, criterion, optimizer, scheduler=None, device=
 
                 losses.append(running_loss/(args.log_interval))
                 training_acc.append(100.0*running_acc/args.log_interval)
-                cosine_dists.append(pairwise_cos_dist(net))
+                # mean_grad, diff_grad = gradient_projection_norms(net.dense_2)
+                # mean_grad_proj.append(mean_grad)
+                # diff_grad_proj.append(diff_grad)
+                # cosine_dists.append(pairwise_cos_dist(net))
+                
                 running_loss = 0.0
                 running_acc = 0.0
         
@@ -90,17 +88,21 @@ def train(args, net, train_loader, criterion, optimizer, scheduler=None, device=
             print('End of epoch {}: Validation loss: {:.6f}\tValidation accuracy: {:.2f}%'.format(
                 epoch + start_epoch + 1, val_loss, val_acc*100))
 
-        # torch.save(net, os.path.join(save_dir, 'epoch_'+ str(epoch + start_epoch +  1) + '.pt'))
+        torch.save(net, os.path.join(save_dir, 'epoch_'+ str(epoch + start_epoch +  1) + '.pt'))
 
     losses = np.array(losses)
     training_acc = np.array(training_acc)
-    cosine_dists = np.array(cosine_dists)
+    # cosine_dists = np.array(cosine_dists)
+    # mean_grad_proj = np.vstack([np.array(mean_grad_proj).mean(axis=0), np.array(mean_grad_proj).std(axis=0)])
+    # diff_grad_proj = np.vstack([np.array(diff_grad_proj).mean(axis=0), np.array(diff_grad_proj).std(axis=0)])
     
     return losses, training_acc, cosine_dists
 
 def test(net, test_loader, criterion, device='cpu'):
     val_acc = 0.0
     val_loss = 0.0
+
+    net.eval()
 
     for batch_idx, data in enumerate(test_loader, 0):
         # get the inputs; data is a list of [inputs, labels]
@@ -165,11 +167,15 @@ def main():
                         help='parent directory to store logs')
     parser.add_argument('--smart-init', action='store_true', default=False,
                         help='whether to start with weights from a smaller trained network')
+    parser.add_argument('--net2net-at-start', action='store_true', default=False,
+                        help='whether to start with replicated weights from the beginning')
     parser.add_argument('--weight-norm', action='store_true', default=False,
                         help='whether to normalize weights before net2net')
     parser.add_argument('--ortho-reg', action='store_true', default=False,
                         help='whether to apply cosinne distance-based regularization')
-    parser.add_argument('--symmetry-break-method', type=str, default='v2',
+    parser.add_argument('--dropout', action='store_true', default=False,
+                        help='whether to apply dropout')
+    parser.add_argument('--symmetry-break-method', type=str, default='simple',
                         help='which method to use to break symmetry in new network')
     parser.add_argument('--noise-var', type=float, default=0.5, metavar='M',
                         help='Noise to add if performing Net2Net expansion (default: 0.5)')
@@ -197,6 +203,8 @@ def main():
                        ])),
         batch_size=args.test_batch_size, shuffle=True, **kwargs)
 
+    total_epochs = args.epochs
+
     if args.smart_init:
         args.epochs = int(args.epochs/2)
 
@@ -213,11 +221,15 @@ def main():
         description = 'smart_init_'
         if args.ortho_reg:
             description = description + 'ortho_reg_'
+        if args.dropout:
+            description = description + 'dropout_'
         save_dir = os.path.join(parent_dir, description + args.symmetry_break_method + '_' + str(args.noise_var))
     else:
         description = 'train_from_scratch'
         if args.ortho_reg:
             description = description + '_ortho_reg'
+        if args.net2net_at_start:
+            description = description + '_net2net_at_start'
         save_dir = os.path.join(parent_dir, description)
     os.makedirs(save_dir, exist_ok=True)
 
@@ -236,10 +248,10 @@ def main():
         optimizer = optim.SGD(model.parameters(), lr=args.lr, momentum=args.momentum)
         # scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=100, gamma=0.1)
 
-        if not args.smart_init:
+        if not args.smart_init and not args.net2net_at_start:
             losses, training_acc, cosine_dists = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader, 
                 save_dir=os.path.join(save_dir, 'weight_history', 'run_' + str(i)), ortho_reg=args.ortho_reg)
-        elif teacher_exists(parent_dir, i, args.epochs):
+        elif teacher_exists(parent_dir, i, args.epochs) and not args.net2net_at_start:
             print("Teacher exists, continuing training")
             losses = np.load(os.path.join(parent_dir, 'teacher', 'loss_curve_' + str(i) + '.npy'))
             training_acc = np.load(os.path.join(parent_dir, 'teacher', 'acc_curve_' + str(i) + '.npy'))
@@ -248,16 +260,21 @@ def main():
             model.num_neurons = args.num_hidden_neurons//2
         else:
             print("Teacher does not exist, training from start")
+            if args.net2net_at_start:
+                args.epochs = 0
             losses, training_acc, cosine_dists = train(args, model, train_loader, criterion, optimizer, device=device, test_loader=test_loader, 
                 save_dir=os.path.join(save_dir, 'weight_history', 'run_' + str(i)))
-            
             os.makedirs(os.path.join(parent_dir, 'teacher'), exist_ok=True)
-            np.save(os.path.join(parent_dir, 'teacher', 'loss_curve_' + str(i)), losses)
-            np.save(os.path.join(parent_dir, 'teacher', 'acc_curve_' + str(i)), training_acc)
-            np.save(os.path.join(parent_dir, 'teacher', 'cos_dists_' + str(i)), cosine_dists)
-            torch.save(model, os.path.join(parent_dir, 'teacher', 'trained_network_' + str(i) + '.pt'))
+            if not args.net2net_at_start:
+                np.save(os.path.join(parent_dir, 'teacher', 'loss_curve_' + str(i)), losses)
+                np.save(os.path.join(parent_dir, 'teacher', 'acc_curve_' + str(i)), training_acc)
+                np.save(os.path.join(parent_dir, 'teacher', 'cos_dists_' + str(i)), cosine_dists)
+                torch.save(model, os.path.join(parent_dir, 'teacher', 'trained_network_' + str(i) + '.pt'))
 
-        if args.smart_init:
+        if args.net2net_at_start:
+            args.epochs = total_epochs
+
+        if args.smart_init or args.net2net_at_start:
             print("Growing network and continuing training")
 
             model_ = net_definition(num_neurons=args.num_hidden_neurons, device=device)
@@ -267,6 +284,10 @@ def main():
             model = model_
             model.grow_network(symmetry_break_method=args.symmetry_break_method, noise_var=args.noise_var, weight_norm = args.weight_norm)
             print('New model definition')
+
+            if args.dropout:
+                model.dropout = True
+
             print(model)
 
             val_loss, val_acc = test(model, test_loader, criterion, device=device)
