@@ -13,9 +13,9 @@ def gradient_projection_norms(layer):
     
     return mean_grad, diff_grad
 
-def pairwise_cos_dist(net):
-    w = net.dense_2.weight.data.cpu()
-    b = net.dense_2.bias.data.cpu()
+def pairwise_cos_dist(layer):
+    w = layer.weight.data.cpu()
+    b = layer.bias.data.cpu()
     w1 = torch.cat((w,b.unsqueeze(1)), dim=1)
 
     cd = cosine_similarity(w1,w1)

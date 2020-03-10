@@ -36,7 +36,7 @@ class simpleFCNet(nn.Module):
 
 class FCNet(nn.Module):
 
-    def __init__(self, num_neurons=5, device='cpu', dropout=False):
+    def __init__(self, num_neurons=5, device='cpu', dropout=False, trained_net_file=None, freeze_feature_extraction=True):
         super(FCNet, self).__init__()
 
         self.device = device
@@ -44,6 +44,14 @@ class FCNet(nn.Module):
         self.dropout = dropout
         
         self.dropout_layer = nn.Dropout(p=0.5)
+        if trained_net_file is not None:
+            trained_net = torch.load(trained_net_file)
+            dict_trained_params = dict(trained_net.dense_1.named_parameters())
+            for name, param in self.dense_1.named_parameters():
+                if name in dict_trained_params:
+                    print('Copying pretrained ' + name)
+                    param.requires_grad = False
+                    param.copy_(dict_trained_params[name].data)
         self.dense_1 = nn.Linear(784, 20)
         self.dense_2 = nn.Linear(20, num_neurons)
         self.dense_out = nn.Linear(num_neurons, 10)
