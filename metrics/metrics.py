@@ -24,25 +24,31 @@ class Metrics():
         self.values = list(np.load(os.path.join(parent_dir, self.f_name + '_' + str(run_num) + '.npy')))
 
 class CosineStats():
-    def __init__(self, layer, population_size):
+    def __init__(self, layer, population_size, basic_mode=False):
         self.num_neurons = layer.out_features
         self.cosine_dists = pairwise_cos_dist(layer)
         self.layer = layer # Pointer to layer of interest, no need to pass new weights every time step
         self.iu2 = np.triu_indices(self.num_neurons, k=1)
-        self.low_overlap_pair_indices, self.high_overlap_pair_indices = sorted_subset_weight_pairs(self.cosine_dists[self.iu2], self.iu2, num_pairs=population_size)
-        self.low_overlap_x = self.iu2[0][self.low_overlap_pair_indices]
-        self.low_overlap_y = self.iu2[1][self.low_overlap_pair_indices]
-        self.high_overlap_x = self.iu2[0][self.high_overlap_pair_indices]
-        self.high_overlap_y = self.iu2[1][self.high_overlap_pair_indices]
 
         w = np.array(torch.cat((self.layer.weight.data, self.layer.bias.data.unsqueeze(1)), dim=1).cpu())
-        self.old_mean_w = self._compute_mean_w_population(w)
+        
+        self.basic_mode = basic_mode
+        if not self.basic_mode:
+            self.low_overlap_pair_indices, self.high_overlap_pair_indices = sorted_subset_weight_pairs(self.cosine_dists[self.iu2], self.iu2, num_pairs=population_size)
+            self.low_overlap_x = self.iu2[0][self.low_overlap_pair_indices]
+            self.low_overlap_y = self.iu2[1][self.low_overlap_pair_indices]
+            self.high_overlap_x = self.iu2[0][self.high_overlap_pair_indices]
+            self.high_overlap_y = self.iu2[1][self.high_overlap_pair_indices]
+            self.old_mean_w = self._compute_mean_w_population(w)
 
     def initial_stats(self):
         hist = self._compute_hist()
-        cd = self._cos_dist_subpopulation()
+        if not self.basic_mode:
+            cd = self._cos_dist_subpopulation()
+        else:
+            cd = []
 
-        return self.cosine_dists, hist, cd
+        return hist, cd
 
     def _compute_mean_w_population(self, w):
         low_overlap_means = 0.5*(w[self.low_overlap_x] + w[self.low_overlap_y])
@@ -62,11 +68,15 @@ class CosineStats():
         self.cosine_dists = pairwise_cos_dist(self.layer)
 
         hist = self._compute_hist()
-        cd = self._cos_dist_subpopulation()
+        if not self.basic_mode:
+            cd = self._cos_dist_subpopulation()
 
-        w = np.array(torch.cat((self.layer.weight.data, self.layer.bias.data.unsqueeze(1)), dim=1).cpu())
-        mean_w = self._compute_mean_w_population(w)
-        cm = cosine_similarity(self.old_mean_w, mean_w).diagonal()
-        self.old_mean_w = mean_w
+            w = np.array(torch.cat((self.layer.weight.data, self.layer.bias.data.unsqueeze(1)), dim=1).cpu())
+            mean_w = self._compute_mean_w_population(w)
+            cm = cosine_similarity(self.old_mean_w, mean_w).diagonal()
+            self.old_mean_w = mean_w
+        else:
+            cd = []
+            cm = []
 
         return hist, cd, cm

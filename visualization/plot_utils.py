@@ -62,3 +62,10 @@ def sorted_subset_weight_pairs(x, iu2, num_pairs=100):
         j += 1
 
     return low_overlap_pair_indices, high_overlap_pair_indices
+
+
+def numpy_to_mpl_hist(np_hist_output):
+    hist, bins = np_hist_output
+    width = (bins[1] - bins[0])
+    center = (bins[:-1] + bins[1:]) / 2
+    return hist, center, width

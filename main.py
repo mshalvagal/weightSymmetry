@@ -4,11 +4,12 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 
-import numpy as np
-import argparse
-import yaml
 import os
 import copy
+import argparse
+import yaml
+import shutil
+import numpy as np
 
 from nets.simpleNet import simpleFCNet, FCNet
 from nets.convNet import simpleConvNet
@@ -96,7 +97,8 @@ class Experiment():
         if self.logparams['metrics']['accuracy']:
             self.metrics_list['accuracy'] = Metrics('acc_curve')
         if self.logparams['metrics']['cosine-dists']:
-            self.metrics_list['cosine_dists'] = Metrics('cosine_dists')
+            if not self.logparams['metrics']['cosine-dists']['stats-only']:
+                self.metrics_list['cosine_dists'] = Metrics('cos_dists')
             self.metrics_list['cosine_dists_hist'] = Metrics('cosine_dists_hist')
             self.metrics_list['cosine_dists_diff'] = Metrics('cosine_dists_diff')
             self.metrics_list['cosine_dists_mean'] = Metrics('cosine_dists_mean')
@@ -120,8 +122,9 @@ class Experiment():
                 self.net = self.network_generator(num_neurons=self.network_config['num-hidden-neurons']//2, device=self.device,\
                     dropout=self.experiment_params['regularizer']['dropout'])
             else:
+                trained_net_file = self.experiment_params['trained-feature-extractor']['path'] if self.experiment_params['trained-feature-extractor']['flag'] else None
                 self.net = self.network_generator(num_neurons=self.network_config['num-hidden-neurons'], device=self.device,\
-                    dropout=self.experiment_params['regularizer']['dropout'])
+                    dropout=self.experiment_params['regularizer']['dropout'], trained_net_file=trained_net_file)
             print('Model definition')
             print(self.net)
             self.criterion = nn.CrossEntropyLoss()
@@ -143,7 +146,7 @@ class Experiment():
                 print("Teacher does not exist, training from start")
                 if self.experiment_params['network-growth']['at-start-flag']:
                     self.experiment_params['network-growth']['epochs-before-growth'] = 0
-                self._train(self.experiment_params['network-growth']['epochs-before-growth'])
+                self._train(self.experiment_params['network-growth']['epochs-before-growth'], teacher_training=True)
                 teacher_dir = os.path.join(os.path.dirname(self.logdir), 'teacher_' + \
                     str(self.experiment_params['network-growth']['epochs-before-growth']) + '_epochs')
                 os.makedirs(teacher_dir, exist_ok=True)
@@ -182,12 +185,20 @@ class Experiment():
             for metric in self.metrics_list:
                 self.metrics_list[metric].save_to_disk(self.logdir, i)
 
-    def _train(self, num_epochs, start_epoch=0):
+    def _train(self, num_epochs, start_epoch=0, teacher_training=False):
         self.test_acc = []
         self.cosine_dist_hists = []
 
         log_interval = self.logparams['log-interval']
         self.net.train()
+
+        layer_of_interest = self.net.dense_2 if self.network_config['two-hidden-layers'] else self.net.dense_1
+        if self.logparams['metrics']['cosine-dists']['flag']:
+            cosine_stats = CosineStats(layer_of_interest, self.logparams['metrics']['cosine-dists']['population-size'], teacher_training)
+            hist, cd = cosine_stats.initial_stats()
+            self.metrics_list['cosine_dists_hist'].log_vals(hist)
+            if not teacher_training:
+                self.metrics_list['cosine_dists_diff'].log_vals(cd)
 
         for epoch in range(num_epochs):  # loop over the dataset multiple times
 
@@ -196,15 +207,9 @@ class Experiment():
 
             running_loss = 0.0
             running_acc = 0.0
-
-            layer_of_interest = self.net.dense_2 if self.network_config['two-hidden-layers'] else self.net.dense_1
-            if self.logparams['metrics']['cosine-dists']['flag']:
-                cosine_stats = CosineStats(layer_of_interest, self.logparams['metrics']['cosine-dists']['population-size'])
-                cosine_dist, hist, cd = cosine_stats.initial_stats()
-                self.metrics_list['cosine_dists'].log_vals(cosine_dist)
-                self.metrics_list['cosine_dists_hist'].log_vals(hist)
-                self.metrics_list['cosine_dists_diff'].log_vals(cd)
-            if self.logparams['metrics']['weights']:
+            if self.logparams['metrics']['cosine-dists']['flag'] and not self.logparams['metrics']['cosine-dists']['stats-only']:
+                self.metrics_list['cosine_dists'].log_vals(cosine_stats.cosine_dists)
+            if self.logparams['metrics']['weights'] and not teacher_training:
                 torch.save(self.net, os.path.join(self.logdir, 'weight_history', 'run_' + str(self.current_run), 'epoch_'+ str(epoch + start_epoch +  1) + '.pt'))
 
             for batch_idx, data in enumerate(self.train_loader, 0):
@@ -248,9 +253,9 @@ class Experiment():
                         100. * batch_idx / len(self.train_loader), loss.item(), acc*100))
 
                     if self.logparams['metrics']['loss']:
-                        self.metrics_list['loss'].log_vals(running_loss/(log_interval))
+                        self.metrics_list['loss'].log_vals(loss.item())
                     if self.logparams['metrics']['accuracy']:
-                        self.metrics_list['accuracy'].log_vals(100.0*running_acc/log_interval)
+                        self.metrics_list['accuracy'].log_vals(100.0*acc)
                     if self.logparams['metrics']['gradient-projections']:
                         mean_grad, diff_grad = gradient_projection_norms(layer_of_interest)
                         self.metrics_list['mean_grad'].log_vals(mean_grad)
@@ -258,8 +263,9 @@ class Experiment():
                     if self.logparams['metrics']['cosine-dists']['flag']:
                         hist, cd, cm = cosine_stats.compute_stats()
                         self.metrics_list['cosine_dists_hist'].log_vals(hist)
-                        self.metrics_list['cosine_dists_diff'].log_vals(cd)
-                        self.metrics_list['cosine_dists_mean'].log_vals(cm)
+                        if not teacher_training:
+                            self.metrics_list['cosine_dists_diff'].log_vals(cd)
+                            self.metrics_list['cosine_dists_mean'].log_vals(cm)
 
                     running_loss = 0.0
                     running_acc = 0.0
@@ -313,7 +319,8 @@ class Experiment():
     def _reset_metrics_on_growth(self):
         # Flush cosine similarity values (because the size changes on growing the network)
         if self.logparams['metrics']['cosine-dists']:
-            self.metrics_list['cosine_dists'].reset()
+            if not self.logparams['metrics']['cosine-dists']['stats-only']:
+                self.metrics_list['cosine_dists'].reset()
             self.metrics_list['cosine_dists_hist'].reset()
             self.metrics_list['cosine_dists_diff'].reset()
             self.metrics_list['cosine_dists_mean'].reset()
@@ -334,3 +341,4 @@ if __name__ == '__main__':
     torch.manual_seed(settings['random-seed'])
     experiment = Experiment(settings)
     experiment.run_experiment()
+    shutil.copy2(args.experiment_file, experiment.logdir)
