@@ -56,7 +56,7 @@ class CosineStats():
         return np.concatenate((low_overlap_means, high_overlap_means))
 
     def _compute_hist(self):
-        return np.histogram(self.cosine_dists[self.iu2])
+        return np.histogram(self.cosine_dists[self.iu2], bins=50, range=(-1,1))
 
     def _cos_dist_subpopulation(self):
         cd_low = self.cosine_dists[self.iu2][self.low_overlap_pair_indices]
