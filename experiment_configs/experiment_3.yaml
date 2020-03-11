@@ -1,7 +1,7 @@
 ---
 # Setup
 random-seed: 42
-num-runs: 5
+num-runs: 3
 epochs: 800
 no-cuda: False
 

@@ -117,6 +117,7 @@ class Experiment():
 
             self.current_run = i
             print('Beginning run ' + str(i))
+            self._setup_metrics()
 
             if self.experiment_params['network-growth']['flag']:
                 self.net = self.network_generator(num_neurons=self.network_config['num-hidden-neurons']//2, device=self.device,\
