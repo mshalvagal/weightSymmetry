@@ -8,7 +8,7 @@ no-cuda: False
 # Logging parameters
 log-params:
   log-interval: 1
-  logdir: 'logs/experiment_3'
+  logdir: 'logs/experiment_1'
   metrics:
     weights: True
     loss: True
@@ -17,27 +17,27 @@ log-params:
     cosine-dists:
       flag: True
       stats-only: True
-      population-size: 10
+      population-size: 100
     gradient-projections: False
 
 # Training hyperparameters
 hyperparams:
   batch-size: 512
-  learning-rate: 0.005
-  momentum: 0.99
+  learning-rate: 0.01
+  momentum: 0.9
   test-batch-size: 1000
 
 # Network config
 # Note: first hidden layer fixed at size 20 in case 2 hidden layers are used
 network-config:
   two-hidden-layers: True
-  num-hidden-neurons: 100
+  num-hidden-neurons: 500
 
 # Experimental settings
 experiment-params:
   trained-feature-extractor:
-    flag: False
-    path: '/home/manu/Projects/dev/weightSymmetry/demolog/2 hidden layers/500 neurons/train_from_scratch/weight_history/run_0/epoch_13.pt'
+    flag: True
+    path: '/root/weightSymmetry/logs/experiment_1/2 hidden layers/500 neurons/train_from_scratch/weight_history/run_0/epoch_800.pt'
   regularizer:
     ortho-reg: False
     dropout: False
