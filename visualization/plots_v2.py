@@ -29,8 +29,8 @@ def scrollable_loss_vs_hist(parent_dir, run_num, ylim=None, net2net=False, steps
 
 
         ax1.cla()
-        ax1.plot(loss_curve)
-        ax1.plot(curr_pos  + offset, loss_curve[curr_pos + offset], marker='o', label='batch ' + str(curr_pos))
+        ax1.loglog(loss_curve)
+        ax1.loglog(curr_pos  + offset, loss_curve[curr_pos + offset], marker='o', label='batch ' + str(curr_pos))
         ax1.legend()
 
         ax2.cla()
@@ -45,8 +45,8 @@ def scrollable_loss_vs_hist(parent_dir, run_num, ylim=None, net2net=False, steps
     fig = plt.figure()
     fig.canvas.mpl_connect('key_press_event', key_event)
     ax1 = fig.add_subplot(211)
-    ax1.plot(loss_curve)
-    ax1.plot(1 + offset, loss_curve[1 + offset], marker='o')
+    ax1.loglog(loss_curve)
+    ax1.loglog(1 + offset, loss_curve[1 + offset], marker='o')
 
     ax2 = fig.add_subplot(212)
     hist, center, width = numpy_to_mpl_hist(x[0])
