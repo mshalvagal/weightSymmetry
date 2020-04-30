@@ -17,21 +17,21 @@ log-params:
     cosine-dists:
       flag: True
       stats-only: True
-      population-size: 100
+      population-size: 10
     gradient-projections: False
 
 # Training hyperparameters
 hyperparams:
-  batch-size: 256
-  learning-rate: 0.01
-  momentum: 0.9
+  batch-size: 512
+  learning-rate: 0.005
+  momentum: 0.99
   test-batch-size: 1000
 
 # Network config
 # Note: first hidden layer fixed at size 20 in case 2 hidden layers are used
 network-config:
-  two-hidden-layers: True
-  num-hidden-neurons: 500
+  two-hidden-layers: False
+  num-hidden-neurons: 40
 
 # Experimental settings
 experiment-params:
