@@ -76,3 +76,36 @@ def initial_vs_final_overlap(parent_dir, run_num, subset_plot=None):
         plt.scatter(x[low_overlap_pair_indices], cos_dists[-1][iu2][low_overlap_pair_indices])
         plt.xlabel('Initial overlap', fontsize=25)
         plt.ylabel('Final overlap', fontsize=25)
+
+def MSD_plot(parent_dir, run_num, max_time_lag, start_batch=0, end_batch=-1):
+    
+    cd_ranked = np.load(os.path.join(parent_dir, 'cosine_dists_diff_' + str(run_num) + '.npy'))[start_batch:end_batch]
+    
+    msd_low = np.zeros(max_time_lag)
+    msd_high = np.zeros(max_time_lag)
+    se_low = np.zeros(max_time_lag)
+    se_high = np.zeros(max_time_lag)
+
+    for i in range(1,max_time_lag):
+        sq_diff = ((cd_ranked[i:] - cd_ranked[:-i])**2).mean(axis=0)
+        # sq_diff = ((cd_ranked[i:] - cd_ranked[0])**2).mean(axis=0)
+
+        n_pairs = len(sq_diff)//2
+        msd_low[i] = np.mean(sq_diff[:n_pairs])
+        se_low[i] = np.std(sq_diff[:n_pairs])/(np.sqrt(n_pairs))
+        msd_high[i] = np.mean(sq_diff[n_pairs:])
+        se_high[i] = np.std(sq_diff[n_pairs:])/(np.sqrt(n_pairs))
+    
+    plt.figure(figsize=(8,5))
+
+    plt.plot(np.arange(max_time_lag), msd_low, label='low_overlap_pairs', linewidth=3)
+    plt.fill_between(np.arange(max_time_lag), msd_low-se_low, msd_low+se_low, alpha=0.25)
+
+    plt.plot(np.arange(max_time_lag), msd_high, label='high_overlap_pairs', linewidth=3)
+    plt.fill_between(np.arange(max_time_lag), msd_high-se_high, msd_high+se_high, alpha=0.25)
+
+    plt.title('Mean MSD')
+    plt.xlabel('Time Lag', fontsize=25)
+    plt.ylabel('Mean MSD', fontsize=25)
+    plt.tick_params(labelsize=20)
+    plt.legend(fontsize=20)
