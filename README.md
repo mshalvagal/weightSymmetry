@@ -8,3 +8,10 @@ Weight configurations where two or more weight vectors are identical have been s
 **Requirements:** PyTorch, NumPy, Matplotlib
 
 To generate the simulations described in the thesis, modify appropriately the `experiment_settings.yaml` file and run `main.py`. The jupyter notebooks provided also present some examples of how to use the plotting modules.
+
+
+## Detecting high weight vector overlaps
+
+A direct way to detect if two or more weights are becoming aligned during training is to monitor the histogram of the cosine similarities between every weight vector of a given hidden layer. All data presented here are from networks trained on the MNIST digit classification task.
+
+![Network with a single hidden layer (40 hidden units)](img/basic.gif)
