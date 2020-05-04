@@ -196,7 +196,7 @@ class Experiment():
         layer_of_interest = self.net.dense_2 if self.network_config['two-hidden-layers'] else self.net.dense_1
         if self.logparams['metrics']['cosine-dists']['flag']:
             cosine_stats = CosineStats(layer_of_interest, self.logparams['metrics']['cosine-dists']['population-size'], teacher_training)
-            hist, cd = cosine_stats.initial_stats()
+            hist, cd, _ = cosine_stats.initial_stats()
             self.metrics_list['cosine_dists_hist'].log_vals(hist)
             if not teacher_training:
                 self.metrics_list['cosine_dists_diff'].log_vals(cd)
