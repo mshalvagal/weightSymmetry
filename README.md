@@ -7,4 +7,4 @@ Weight configurations where two or more weight vectors are identical have been s
 
 **Requirements:** PyTorch, NumPy, Matplotlib
 
-To generate the simulations described in the thesis, modify appropriately the `experimental_settings.yaml` file and run `main.py`. The jupyter notebooks provided also present some examples of how to use the plotting modules.
+To generate the simulations described in the thesis, modify appropriately the `experiment_settings.yaml` file and run `main.py`. The jupyter notebooks provided also present some examples of how to use the plotting modules.
