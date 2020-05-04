@@ -14,4 +14,12 @@ To generate the simulations described in the thesis, modify appropriately the `e
 
 A direct way to detect if two or more weights are becoming aligned during training is to monitor the histogram of the cosine similarities between every weight vector of a given hidden layer. All data presented here are from networks trained on the MNIST digit classification task.
 
-![Network with a single hidden layer (40 hidden units)](img/basic.gif)
+1. A typical network with a single hidden layer (40 hidden units)
+![](img/basic.gif)
+
+2. A network with two hidden layers (20, 500), i.e, an overparametrized layer following a bottleneck
+![](img/bottleneck.gif)
+
+We see that high overlaps very close to 1 are not specifically encountered even with a high number of units. However the overparametrized layer in the second case shows some interesting behaviour. We can plot the pairwise cosines at different stages of training as a function of their initial values to see whether units with partially-aligned weight vectors are able to decorrelate throughout training.
+
+![](img/overlaps_evolution.png)
