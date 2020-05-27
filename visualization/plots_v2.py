@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import os
 import numpy as np
+from scipy.signal import savgol_filter
 from visualization.plot_utils import sorted_subset_weight_pairs, numpy_to_mpl_hist
 
 def scrollable_loss_vs_hist(parent_dir, run_num, ylim=None, net2net=False, steps=1):
@@ -109,3 +110,33 @@ def MSD_plot(parent_dir, run_num, max_time_lag, start_batch=0, end_batch=-1):
     plt.ylabel('Mean MSD', fontsize=25)
     plt.tick_params(labelsize=20)
     plt.legend(fontsize=20)
+
+def plot_loss_and_smoothed_derivative(parent_dir, run_num):
+    loss_curve = np.load(os.path.join(parent_dir, 'loss_curve_' + str(run_num) + '.npy'))
+    fig = plt.figure(figsize=(10, 12))
+    ax1 = fig.add_subplot(311)
+    ax1.set_title('Loss and derivative', fontsize=15)
+    ax1.loglog(loss_curve)
+    ax1.set_ylabel('Loss', fontsize=20)
+    ax2 = fig.add_subplot(312)
+    ax2.semilogx(np.diff(savgol_filter(loss_curve, 51, 3)))
+    ax2.set_ylabel('Loss derivative', fontsize=20)
+
+def population_quiver_plot(sd, sm, highlight_epochs):
+
+    sd_flow = sd[1:] - sd[:-1]
+    sm_flow = sm[1:] - sm[:-1]
+
+    mask = np.ones(sd.shape[0])
+    for i in highlight_epochs:
+        mask[i] = 0
+
+    fig, ax = plt.subplots(10, 10, figsize=(40, 40))
+    i=0
+    for row in ax:
+        for col in row:
+            col.quiver(sm[:-1, 100+i], sd[:-1, 100+i], sm_flow[:, 100+i], sd_flow[:, 100+i], mask, cmap=plt.cm.flag)
+            col.get_yaxis().get_major_formatter().set_useOffset(False)
+            i += 1
+    fig.text(0.5, 0.04, 'Mean vector sine to final position', ha='center', fontsize=20)
+    fig.text(0.04, 0.5, 'Pairwise sine', va='center', rotation='vertical', fontsize=20)
